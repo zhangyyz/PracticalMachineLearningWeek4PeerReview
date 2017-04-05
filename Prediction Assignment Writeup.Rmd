@@ -1,0 +1,114 @@
+---
+title: "Peer-graded Assignment: Prediction Assignment Writeup"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Preparation
+
+Download the data and load them into R (the original data are provided by http://groupware.les.inf.puc-rio.br/har).
+
+```{r, cache=TRUE}
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",
+              destfile = 'temp1.csv')
+
+download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = 'temp2.csv')
+
+data <- read.csv("temp1.csv")
+quiz_testing <- read.csv("temp2.csv")
+```
+
+## Explore the data
+```{r}
+dim(data)
+head(data)[,1:10]
+```
+
+##Cleanse the data
+
+First, I removed all near zero variables using the nearZeroVar function.
+
+```{r}
+library(caret)
+izerovar <- nearZeroVar(data)
+data <- data[,-izerovar]
+```
+
+Second, I removed columns in which NA values are more than 90%.
+
+```{r}
+data <- data[, (colSums(is.na(data)) / nrow(data) < 0.1)]
+```
+
+Third, I removed timestamps related columns and the user name column because from the domain knowledge they are unrelated to the prediction model.
+
+```{r}
+data <- subset(data, select = -c(user_name, raw_timestamp_part_1, raw_timestamp_part_2, cvtd_timestamp))
+```
+
+Fourth, I removed hightly correlated variables from the data set.
+
+```{r}
+data <- data[, -findCorrelation(cor(data[,-ncol(data)]), cutoff=0.95)]
+```
+
+Last, I split the data set by 80/20 into a training set and validation set.
+
+```{r}
+set.seed(100)
+iTraining <- createDataPartition(data$classe, p=0.8, list=FALSE)
+training <-  data[iTraining,]
+validation <- data[-iTraining,]
+```
+
+##Try different algorithms
+
+First, I tried Random Forest algorithm.
+
+```{r, cache=TRUE}
+set.seed(100)
+modelRF <- train(classe ~ ., data=training, method="rf", trControl = trainControl(method="cv", number=4, verboseIter=FALSE))
+```
+
+Second, I tried Linear Discriminant Analysis.
+
+```{r, cache=TRUE}
+set.seed(100)
+modelLDA <- train(classe ~ ., data=training, method="lda", trControl = trainControl(method="cv", number=4, verboseIter=FALSE))
+```
+
+Third, I tried Decision Tree
+```{r, cache=TRUE}
+set.seed(100)
+modelDT <- train(classe ~ ., data=training, method="rpart", trControl = trainControl(method="cv", number=4, verboseIter=FALSE))
+```
+
+## Conclusion
+
+After training with three different algorithms, I tested the models using the validation data set and compared their accuracies to see which one performs better than others.
+
+```{r}
+
+confusionMatrix(validation$classe, predict(modelRF, validation))
+                
+confusionMatrix(validation$classe, predict(modelLDA, validation))
+
+confusionMatrix(validation$classe, predict(modelDT, validation))
+
+Accs <- c(confusionMatrix(validation$classe, predict(modelRF, validation))[[3]][[1]],
+          confusionMatrix(validation$classe, predict(modelLDA, validation))[[3]][[1]],
+          confusionMatrix(validation$classe, predict(modelDT, validation))[[3]][[1]])
+
+Result <- cbind(Algorithm = c('Random Forest', 'Linear Discriminant Analysis', 'Decision Tree'),
+                Accuracy=Accs)
+
+Result
+```
+
+From the tesing result, I can conclude that both Random Forest and Linear Discriminant Analysis have good accuracy. However, Decision Tree doesn't seem to perform well for this task.
+
+
+
